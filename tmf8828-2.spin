@@ -14,6 +14,8 @@ con
     SL      = $41 << 1
     EN_M    = 24
 
+    REG_APPID       = $00
+
     BL_CMD_STAT     = $08
     { commands }
     RAMREMAP_RESET  = $11
@@ -23,7 +25,7 @@ con
     W_RAM           = $41
     ADDR_RAM        = $43
 
-pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, img_csum, status
+pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, img_csum, status, aid
 
     outa[EN_M] := 0
     dira[EN_M] := 1
@@ -159,13 +161,12 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 
 '3)
     { load RAM }
-    img_remain := $1bd8'TMF8828_IMAGE_LENGTH
+    img_remain := _img_sz
     img_ptr := @tmf8828_image   ' init pointer to start of FW image
     repeat
-        img_csum := 0
         chunk_sz := img_remain <# 128   ' chunk size is the remaining size, up to 128 bytes
+        ser.pos_xy(0, 8)
         ser.printf1(@"about to write offset %x\n\r", img_ptr)
-        ser.printf1(@"remaining: %d\n\r", img_remain)
         i2c.start()
         i2c.write(SL)
         i2c.write(BL_CMD_STAT)
@@ -174,12 +175,11 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
         i2c.wrblock_lsbf(img_ptr, chunk_sz)
 
         { calc checksum }
+        img_csum := 0
         img_csum += W_RAM
         img_csum += chunk_sz
         repeat tmp from img_ptr to (img_ptr+(chunk_sz-1))
             img_csum += byte[tmp]   ' calc rolling checksum
-        img_ptr += chunk_sz
-        img_remain -= chunk_sz
         i2c.write(img_csum ^ $ff)
         i2c.stop()
 
@@ -197,16 +197,52 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
             img_ptr -= chunk_sz
             img_remain += chunk_sz
             ++tries
-            if (tries > 10)
+            if (tries > 10)                     ' 10: arbitrary
                 ser.strln(@"number of retries exceeded maximum - halting")
                 repeat
         else
             ser.strln(@"write OK")
+            img_ptr += chunk_sz
+            img_remain -= chunk_sz
             tries := 0
+        ser.printf1(@"remaining: %4.4d\n\r", img_remain)
     while img_remain
-    ser.strln(@"COMPLETE!")
+    ser.strln(@"COMPLETE! Press any key")
+    ser.getchar()
+
+
+    ser.str(@"Issuing RAMREMAP_RESET command...")
+    i2c.start()
+    i2c.write(SL)
+    i2c.write(BL_CMD_STAT)
+    i2c.write(RAMREMAP_RESET)
+    i2c.write($00)
+    i2c.write($ee)
+    i2c.stop()
+    ser.strln(@"done")
+
+    time.msleep(3)
+
+    ser.str(@"checking APPID...")
+    tries := 0
     repeat
-DAT
+        i2c.start()
+        i2c.write(SL)
+        i2c.write(REG_APPID)
+        i2c.start()
+        i2c.write(SL|1)
+        aid := 0
+        i2c.rdblock_lsbf(@aid, 1, i2c.NAK)
+        i2c.stop()
+        ser.printf1(@"$%08.8x ", aid)
+        time.usleep(500)
+'        if (++tries > 5)
+'            ser.strln(@"APPID read failed")
+'            repeat
+    until aid == $03
+    ser.strln(@"$03")
+
+    repeat
 
 #include "tmf8828_image.spin"
 
