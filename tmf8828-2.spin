@@ -242,11 +242,7 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 ' Flow:
 '1) Config dev (e.g., select different SPAD mask)
     ser.str(@"Loading common config page...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write(CMD_STAT)
-    i2c.write(LOAD_CFG_PAGE_COM)
-    i2c.stop()
+    command(LOAD_CFG_PAGE_COM)
 
     repeat
         i2c.start()
@@ -304,11 +300,7 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
     ser.strln(@"done")
 
     ser.str(@"writing common page...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write(CMD_STAT)
-    i2c.write($15)
-    i2c.stop()
+    command($15)
     ser.strln(@"done")
 
     ser.str(@"Verifying the command executed...")
@@ -346,11 +338,7 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 
 '2b) MEASURE cmd
     ser.str(@"measuring...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write(CMD_STAT)
-    i2c.write(MEASURE)
-    i2c.stop()
+    command(MEASURE)
 
     ser.str(@"Verifying the command executed...")
     repeat
@@ -369,6 +357,17 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
             repeat
     while status => $10
     ser.strln(@"done")
+
+    ser.str(@"checking app mode...")
+    i2c.start()
+    i2c.write(SL)
+    i2c.write($10)
+    i2c.start()
+    i2c.write(SL|1)
+    status := i2c.read(i2c.NAK)
+    i2c.stop()
+    ser.hexs(status, 2)
+    ser.newline()
 
     ser.str(@"Measuring results...")
     dira[INT_PIN] := 0
@@ -402,6 +401,13 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 '3) Wait for interrupt or poll, and read out results
 '3b) STOP cmd
 
+PUB command(cmd): status
+
+    i2c.start()
+    i2c.write(SL)
+    i2c.write(CMD_STAT)
+    i2c.write(cmd)
+    i2c.stop()
 
 VAR
 
