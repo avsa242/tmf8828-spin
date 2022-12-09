@@ -105,14 +105,7 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 
 '1)
     ser.str(@"sending DOWNLOAD_INIT...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write(BL_CMD_STAT)
-    i2c.write(DOWNLOAD_INIT)
-    i2c.write($01)  ' BL_SIZE = 1
-    i2c.write($29)  ' BL_DATA0 = $0..$ff (Seed)
-    i2c.write($c1)  ' cksum
-    i2c.stop()
+    bl_command(DOWNLOAD_INIT, 1, $29)
     ser.strln(@"done")
 
     ser.str(@"polling bootloader for readiness...")
@@ -133,14 +126,7 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 
 '2)
     ser.str(@"sending ADDR_RAM...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write(BL_CMD_STAT)
-    i2c.write(ADDR_RAM)  ' cksum
-    i2c.write($02)  ' |     BL_SIZE = 2
-    i2c.write($00)  ' |     addr LSB
-    i2c.write($00)  ' |     addr MSB
-    i2c.write($ba)  ' cksum ^ $ff
+    bl_command(ADDR_RAM, 2, $00_00)
     ser.strln(@"done")
 
     { poll bootloader - READY? }
@@ -211,13 +197,7 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 
 
     ser.str(@"Issuing RAMREMAP_RESET command...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write(BL_CMD_STAT)
-    i2c.write(RAMREMAP_RESET)
-    i2c.write($00)
-    i2c.write($ee)
-    i2c.stop()
+    bl_command(RAMREMAP_RESET, 0, 0)
     ser.strln(@"done")
 
     ser.str(@"checking APPID...")
@@ -401,8 +381,35 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 '3) Wait for interrupt or poll, and read out results
 '3b) STOP cmd
 
-PUB command(cmd): status
+PUB bl_command(cmd, len, ptr_args) | ck
+' Execute bootloader command
+    i2c.start()
+    i2c.write(SL)
+    i2c.write(BL_CMD_STAT)
+    i2c.write(cmd)
+    i2c.write(len)                              ' BL_SIZE
+    ck := cmd + len
+    if (len > 4)
+        i2c.wrblock_lsbf(ptr_args, len)
+        ck += sum_blk(ptr_args, len)
+    elseif (len == 0)
+        ck := ck
+    elseif (len < 4)
+        i2c.wrblock_lsbf(@ptr_args, len)
+        ck += sum_blk(@ptr_args, len)
 
+    ser.printf1(@"sum_blk: %02.2x\n\r", ck ^ $ff)
+    i2c.write(ck.byte[0] ^ $ff)  ' cksum
+    i2c.stop()
+
+PUB sum_blk(ptr_data, len): ck | tmp
+' Sum a block of data
+    ck := 0
+    repeat tmp from 0 to len-1
+        ck += byte[ptr_data][tmp]
+
+PUB command(cmd): status
+' Execute application command
     i2c.start()
     i2c.write(SL)
     i2c.write(CMD_STAT)
