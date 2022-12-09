@@ -11,8 +11,9 @@ obj
 
 con
 
-    SL      = $41 << 1
-    EN_M    = 24
+    SLAVE_WR        = $41 << 1
+    SLAVE_RD        = SLAVE_WR | 1
+    EN_M            = 24
 
     REG_APPID       = $00
 
@@ -41,33 +42,18 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
     outa[EN_M] := 1
     time.msleep(1000)
 
-    i2c.start()
-    i2c.write(SL)
-    i2c.write($E0)
-    i2c.write($01)
-    i2c.stop()
+    writereg($e0, 1, $01)
 
     tries := 0
     repeat
-        i2c.start()
-        i2c.write(SL)
-        i2c.write($E0)
-        i2c.start()
-        i2c.write(SL|1)
-        ena := i2c.read(i2c.NAK)
-        i2c.stop()
+        ena := 0
+        readreg($e0, 1, @ena)
         ++tries
-    until ena == $41
+    until (ena == $41)
     ser.printf1(@"success after %d tries\n\r", tries)
 
-    i2c.start()
-    i2c.write(SL)
-    i2c.write($00)
-    i2c.start()
-    i2c.write(SL|1)
-    appid := i2c.read(i2c.NAK)
-    i2c.stop()
-
+    appid := 0
+    readreg(REG_APPID, 1, @appid)
     if (appid == $80)
         ser.strln(@"bootloader running")
     elseif (appid == $03)
@@ -75,33 +61,6 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
     else
         ser.strln(@"error: exception")
         repeat
-
-
-' checksum: CMD_STAT + SIZE + (sum of all data-bytes)
-'   ex: DOWNLOAD_INIT cmd: (( $14 + $01 + $29) ^ $ff) = $c1
-{ flow:
-1)
-    cmd(DOWNLOAD_INIT)
-    repeat
-        readreg(CMD_STAT)
-    while CMD_STAT == BUSY  (or until CMD_STAT == READY ($00 $00 $ff))
-
-2)
-    cmd(ADDR_RAM)
-    repeat
-        readreg(CMD_STAT)
-    while CMD_STAT == BUSY
-
-3)
-    cmd(W_RAM)
-     repeat
-        readreg(CMD_STAT)
-    while CMD_STAT == BUSY
-
-4)
-    cmd(RAMREMAP_AND_RESET)
-    readreg(APPID)
-}
 
 '1)
     ser.str(@"sending DOWNLOAD_INIT...")
@@ -113,15 +72,9 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
     tries := 0
     repeat
         ena := 0
-        i2c.start()
-        i2c.write(SL)
-        i2c.write(BL_CMD_STAT)
-        i2c.start()
-        i2c.write(SL|1)
-        i2c.rdblock_msbf(@ena, 3, i2c.NAK)
-        i2c.stop()
+        readreg(BL_CMD_STAT, 3, @ena)
         ++tries
-    until ena == $00_00_ff
+    until ena == $ff_00_00  ' xxx was 00 00 ff
     ser.printf1(@"ready after %d tries\n\r", tries)
 
 '2)
@@ -134,15 +87,9 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
     tries := 0
     repeat
         ena := 0
-        i2c.start()
-        i2c.write(SL)
-        i2c.write(BL_CMD_STAT)
-        i2c.start()
-        i2c.write(SL|1)
-        i2c.rdblock_msbf(@ena, 3, i2c.NAK)
-        i2c.stop()
+        readreg(BL_CMD_STAT, 3, @ena)
         ++tries
-    until ena == $00_00_ff
+    until ena == $ff_00_00  ' xxx was 00 00 ff
     ser.printf1(@"ready after %d tries\n\r", tries)
 
 '3)
@@ -154,7 +101,7 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
         ser.pos_xy(0, 8)
         ser.printf1(@"about to write offset %x\n\r", img_ptr)
         i2c.start()
-        i2c.write(SL)
+        i2c.write(SLAVE_WR)
         i2c.write(BL_CMD_STAT)
         i2c.write(W_RAM)
         i2c.write(chunk_sz)    ' BL_SIZE (number of bytes to write; up to 128)
@@ -171,14 +118,8 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 
         ser.str(@"checking status of write...")
         status := 0
-        i2c.start()
-        i2c.write(SL)
-        i2c.write(BL_CMD_STAT)
-        i2c.start()
-        i2c.write(SL|1)
-        i2c.rdblock_msbf(@status, 3, i2c.NAK)
-        i2c.stop()
-        if (status <> $00_00_ff)
+        readreg(BL_CMD_STAT, 3, @status)
+        if (status <> $ff_00_00)    'XXX was 00 00 ff
             ser.printf1(@"WRITE FAILED: status %06.8x\n\r", ena)
             img_ptr -= chunk_sz
             img_remain += chunk_sz
@@ -203,14 +144,8 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
     ser.str(@"checking APPID...")
     tries := 0
     repeat
-        i2c.start()
-        i2c.write(SL)
-        i2c.write(REG_APPID)
-        i2c.start()
-        i2c.write(SL|1)
         aid := 0
-        i2c.rdblock_lsbf(@aid, 1, i2c.NAK)
-        i2c.stop()
+        readreg(REG_APPID, 1, @aid)
         ser.printf1(@"$%08.8x ", aid)
         { should respond with $03 after no more than 2.5ms }
         time.usleep(500)
@@ -225,27 +160,17 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
     command(LOAD_CFG_PAGE_COM)
 
     repeat
-        i2c.start()
-        i2c.write(SL)
-        i2c.write(CMD_STAT)
-        i2c.start()
-        i2c.write(SL|1)
-        status := i2c.read(i2c.NAK)
-        i2c.stop()
+        status := 0
+        readreg(CMD_STAT, 1, @status)
         if (status == $00)
             ser.strln(@"STAT_OK")
             quit
-    while status => $10
+    while (status => $10)
     ser.strln(@"done")
 
     ser.str(@"Verifying the config page is loaded...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write($20)
-    i2c.start()
-    i2c.write(SL|1)
-    status := i2c.rdlong_lsbf(i2c.NAK)
-    i2c.stop()
+    status := 0
+    readreg($20, 4, @status)
 
     { verify the config page was loaded by checking the first few bytes: [$16][xx][$bc][$00] }
     if ((status.byte[0] == $16) and (status.word[1] == $00_bc))
@@ -255,28 +180,15 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
         repeat
 
     ser.str(@"changing measurement period to 100ms...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write($24)
-    i2c.write($64)
-    i2c.write($00)
-    i2c.stop()
+    writereg($24, 2, $00_64)
     ser.strln(@"done")
 
     ser.str(@"selecting pre-defined SPAD mask #6...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write($34)
-    i2c.write($06)
-    i2c.stop()
+    writereg($34, 1, $06)
     ser.strln(@"done")
 
     ser.str(@"config GPIO0 low while VCSEL is emitting...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write($31)
-    i2c.write($03)
-    i2c.stop()
+    writereg($31, 1, $03)
     ser.strln(@"done")
 
     ser.str(@"writing common page...")
@@ -285,13 +197,8 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 
     ser.str(@"Verifying the command executed...")
     repeat
-        i2c.start()
-        i2c.write(SL)
-        i2c.write(CMD_STAT)
-        i2c.start()
-        i2c.write(SL|1)
-        status := i2c.read(i2c.NAK)
-        i2c.stop()
+        status := 0
+        readreg(CMD_STAT, 1, @status)
         if (status == $00)
             ser.strln(@"STAT_OK")
             quit
@@ -300,20 +207,10 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 
 '2) Load factory cal data (if SPAD mask has been reconfig'd)
     ser.str(@"Enabling interrupts...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write(INT_ENAB)
-    i2c.write($02)  ' only result interrupts
-'    i2c.write($62)  ' also recv error/warning and cmd done interrupts
-    i2c.stop()
+    writereg(INT_ENAB, 1, $02)
     ser.strln(@"done")
 
-    ser.str(@"clearing interrupts...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write($e1)
-    i2c.write($ff)
-    i2c.stop()
+    writereg($e1, 1, $ff)
     ser.strln(@"done")
 
 '2b) MEASURE cmd
@@ -322,13 +219,8 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 
     ser.str(@"Verifying the command executed...")
     repeat
-        i2c.start()
-        i2c.write(SL)
-        i2c.write(CMD_STAT)
-        i2c.start()
-        i2c.write(SL|1)
-        status := i2c.read(i2c.NAK)
-        i2c.stop()
+        status := 0
+        readreg(CMD_STAT, 1, @status)
         if (status == $01)
             ser.strln(@"STAT_OK")
             quit
@@ -339,13 +231,8 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
     ser.strln(@"done")
 
     ser.str(@"checking app mode...")
-    i2c.start()
-    i2c.write(SL)
-    i2c.write($10)
-    i2c.start()
-    i2c.write(SL|1)
-    status := i2c.read(i2c.NAK)
-    i2c.stop()
+    status := 0
+    readreg($10, 1, @status)
     ser.hexs(status, 2)
     ser.newline()
 
@@ -353,28 +240,9 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
     dira[INT_PIN] := 0
     repeat
         repeat until ina[INT_PIN]
-        i2c.start()
-        i2c.write(SL)
-        i2c.write($e1)
-        i2c.start()
-        i2c.write(SL|1)
-        int_status := i2c.read(i2c.NAK)
-        i2c.stop()
-
-        i2c.start()
-        i2c.write(SL)
-        i2c.write($e1)
-        i2c.write(int_status)
-        i2c.stop()
-
-        i2c.start()
-        i2c.write(SL)
-        i2c.write($20)
-        i2c.start()
-        i2c.write(SL|1)
-        i2c.rdblock_lsbf(@_result, 132, i2c.NAK)
-        i2c.stop()
-
+        readreg($e1, 1, @int_status)
+        writereg($e1, 1, int_status)
+        readreg($20, 132, @_result)
         ser.pos_xy(0, 27)
         ser.hexdump(@_result, $20, 2, 132, 16)
     repeat
@@ -384,7 +252,7 @@ pub main() | tries, ena, appid, csum, acc, tmp, img_ptr, img_remain, chunk_sz, i
 PUB bl_command(cmd, len, ptr_args) | ck
 ' Execute bootloader command
     i2c.start()
-    i2c.write(SL)
+    i2c.write(SLAVE_WR)
     i2c.write(BL_CMD_STAT)
     i2c.write(cmd)
     i2c.write(len)                              ' BL_SIZE
@@ -408,12 +276,33 @@ PUB sum_blk(ptr_data, len): ck | tmp
     repeat tmp from 0 to len-1
         ck += byte[ptr_data][tmp]
 
-PUB command(cmd): status
+PUB command(cmd)
 ' Execute application command
     i2c.start()
-    i2c.write(SL)
+    i2c.write(SLAVE_WR)
     i2c.write(CMD_STAT)
     i2c.write(cmd)
+    i2c.stop()
+
+PUB readreg(reg_nr, nr_bytes, ptr_buff)
+
+    i2c.start()
+    i2c.write(SLAVE_WR)
+    i2c.write(reg_nr)
+    i2c.start()
+    i2c.write(SLAVE_RD)
+    i2c.rdblock_lsbf(ptr_buff, nr_bytes, i2c#NAK)
+    i2c.stop()
+
+PUB writereg(reg_nr, nr_bytes, ptr_buff)
+
+    i2c.start()
+    i2c.write(SLAVE_WR)
+    i2c.write(reg_nr)
+    if ((nr_bytes => 1) and (nr_bytes =< 4))
+        i2c.wrblock_lsbf(@ptr_buff, nr_bytes)
+    else
+        i2c.wrblock_lsbf(ptr_buff, nr_bytes)    ' indirect
     i2c.stop()
 
 VAR
