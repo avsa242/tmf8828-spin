@@ -1,3 +1,14 @@
+{
+    --------------------------------------------
+    Filename: TMF8828-Test.spin
+    Author: Jesse Burt
+    Description: TMF8828 bootloader and application test
+    Copyright (c) 2022
+    Started: Dec 9, 2022
+    Updated: Dec 10, 2022
+    See end of file for terms of use.
+    --------------------------------------------
+}
 CON
 
     _clkmode = xtal1+pll16x
@@ -130,7 +141,7 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
 
 ' 4.1 step 1
     ser.str(@"Loading common config page...")
-    command(core#LOAD_CFG_PAGE_COM)
+    command(core#CMD_LD_CFG_PG_COM)
 
     repeat
         status := 0
@@ -187,7 +198,7 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
     ser.strln(@"done")
 
     ser.str(@"measuring...")
-    command(core#MEASURE)
+    command(core#CMD_MEASURE)
 
     ser.str(@"Verifying the command executed...")
     repeat
