@@ -1,21 +1,23 @@
-con
+CON
 
     _clkmode = xtal1+pll16x
     _xinfreq = 5_000_000
 
-obj
+    SLAVE_WR        = core#SLAVE_ADDR
+    SLAVE_RD        = core#SLAVE_ADDR | 1
+    EN_M            = 24
+    INT_PIN         = 25
+
+OBJ
 
     ser: "com.serial.terminal.ansi"
     time: "time"
     i2c: "com.i2c"
     core: "core.con.tmf8828"
 
-con
+VAR
 
-    SLAVE_WR        = core#SLAVE_ADDR
-    SLAVE_RD        = core#SLAVE_ADDR | 1
-    EN_M            = 24
-    INT_PIN             = 25
+    byte _ramdump[132]
 
 pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, status, aid, int_status
 
@@ -30,15 +32,15 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
     i2c.init(28, 29, 100_000)
     time.msleep(30)
     ser.strln(@"i2c started")
-    outa[EN_M] := 1
-    time.msleep(1000)
 
-    writereg($e0, 1, $01)
+' 1.2.1) Power up
+    outa[EN_M] := 1
+    writereg(core#ENABLE, 1, $01)
 
     tries := 0
     repeat
         ena := 0
-        readreg($e0, 1, @ena)
+        readreg(core#ENABLE, 1, @ena)
         ++tries
     until (ena == $41)
     ser.printf1(@"success after %d tries\n\r", tries)
@@ -53,7 +55,7 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         ser.strln(@"error: exception")
         repeat
 
-'1)
+'3.2)
     ser.str(@"sending core#DOWNLOAD_INIT...")
     bl_command(core#DOWNLOAD_INIT, 1, $29)
     ser.strln(@"done")
@@ -65,7 +67,7 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         ena := 0
         readreg(core#BL_CMD_STAT, 3, @ena)
         ++tries
-    until ena == $ff_00_00  ' xxx was 00 00 ff
+    until (ena == $ff_00_00)  ' xxx was 00 00 ff
     ser.printf1(@"ready after %d tries\n\r", tries)
 
 '2)
@@ -80,22 +82,22 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         ena := 0
         readreg(core#BL_CMD_STAT, 3, @ena)
         ++tries
-    until ena == $ff_00_00  ' xxx was 00 00 ff
+    until (ena == $ff_00_00)  ' xxx was 00 00 ff
     ser.printf1(@"ready after %d tries\n\r", tries)
 
 '3)
     { load RAM }
     img_remain := _img_sz
-    img_ptr := @tmf8828_image   ' init pointer to start of FW image
+    img_ptr := @tmf8828_image                   ' init pointer to start of FW image
     repeat
-        chunk_sz := img_remain <# 128   ' chunk size is the remaining size, up to 128 bytes
+        chunk_sz := img_remain <# 128           ' chunk size is the remaining size, up to 128 bytes
         ser.pos_xy(0, 8)
         ser.printf1(@"about to write offset %x\n\r", img_ptr)
         i2c.start()
         i2c.write(SLAVE_WR)
         i2c.write(core#BL_CMD_STAT)
         i2c.write(core#W_RAM)
-        i2c.write(chunk_sz)    ' BL_SIZE (number of bytes to write; up to 128)
+        i2c.write(chunk_sz)                     ' BL_SIZE (number of bytes to write; up to 128)
         i2c.wrblock_lsbf(img_ptr, chunk_sz)
 
         { calc checksum }
@@ -103,8 +105,8 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         img_csum += core#W_RAM
         img_csum += chunk_sz
         repeat tmp from img_ptr to (img_ptr+(chunk_sz-1))
-            img_csum += byte[tmp]   ' calc rolling checksum
-        i2c.write(img_csum ^ $ff)
+            img_csum += byte[tmp]               ' calc rolling checksum
+        i2c.write(img_csum ^ $ff)               ' one's comp. so sum of 0 doesn't yield chksum of 0
         i2c.stop()
 
         ser.str(@"checking status of write...")
@@ -143,10 +145,9 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         if (++tries > 5)
             ser.strln(@"APPID read failed")
             repeat
-    until aid == $03
+    until (aid == $03)
 
-' Flow:
-'1) Config dev (e.g., select different SPAD mask)
+' 4.1 step 1
     ser.str(@"Loading common config page...")
     command(core#LOAD_CFG_PAGE_COM)
 
@@ -193,18 +194,17 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         if (status == $00)
             ser.strln(@"STAT_OK")
             quit
-    while status => $10
+    while (status => $10)
     ser.strln(@"done")
 
-'2) Load factory cal data (if SPAD mask has been reconfig'd)
+'4.5) MEASURE cmd
     ser.str(@"Enabling interrupts...")
-    writereg(core#INT_ENAB, 1, $02)
+    writereg(core#INT_ENAB, 1, $02) '$62 to include error/warning/cmd done interrupts
     ser.strln(@"done")
 
     writereg($e1, 1, $ff)
     ser.strln(@"done")
 
-'2b) core#MEASURE cmd
     ser.str(@"measuring...")
     command(core#MEASURE)
 
@@ -218,7 +218,7 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         if ((status > $01) and (status < $10))
             ser.printf1(@"error: %2.2x\n\r", status)
             repeat
-    while status => $10
+    while (status => $10)
     ser.strln(@"done")
 
     ser.str(@"checking app mode...")
@@ -227,6 +227,7 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
     ser.hexs(status, 2)
     ser.newline()
 
+'4.6)
     ser.str(@"Measuring results...")
     dira[INT_PIN] := 0
     repeat
@@ -235,7 +236,8 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         writereg($e1, 1, int_status)
         readreg($20, 132, @_ramdump)
         ser.pos_xy(0, 27)
-        ser.hexdump(@_ramdump, $20, 2, 132, 16)
+        ser.hexdump(@_ramdump+4, $20, 2, 132-4, 16)
+
     repeat
 '3) Wait for interrupt or poll, and read out results
 '3b) STOP cmd
@@ -295,10 +297,6 @@ PUB writereg(reg_nr, nr_bytes, ptr_buff)
     else
         i2c.wrblock_lsbf(ptr_buff, nr_bytes)    ' indirect
     i2c.stop()
-
-VAR
-
-    byte _ramdump[132]
 
 #include "tmf8828_image.spin"
 

@@ -4,14 +4,17 @@ CON
 
     APPID               = $00
 
-    { bootloader commands/status }
     BL_CMD_STAT         = $08
+    { bootloader commands }
         RAMREMAP_RESET  = $11
         DOWNLOAD_INIT   = $14
         RAM_BIST        = $2a
         I2C_BIST        = $2c
         W_RAM           = $41
         ADDR_RAM        = $43
+    { status }
+        STAT_ERR_SIZE   = $01
+        STAT_ERR_CSUM   = $02
 
     CMD_STAT            = $08
         MEASURE         = $10
@@ -23,4 +26,5 @@ CON
         LONG_RANGE_ACC  = $6f   ' firmware default bootup
         ACC_UNSUPPORTED = $00
 
-    INT_ENAB            = $42
+    ENABLE              = $e0
+    INT_ENAB            = $e2
