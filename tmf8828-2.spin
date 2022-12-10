@@ -29,7 +29,7 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
     ser.clear()
     ser.strln(@"serial started")
 
-    i2c.init(28, 29, 100_000)
+    i2c.init(28, 29, 1_000_000)
     time.msleep(30)
     ser.strln(@"i2c started")
 
@@ -280,7 +280,6 @@ PUB bl_wait_rdy{} | tries, ena
         ++tries
     until (ena == $ff_00_00)
     ser.printf1(@"ready after %d tries\n\r", tries)
-    ser.getchar
 
 PUB writereg(reg_nr, nr_bytes, ptr_buff)
 ' Write to device register(s)
