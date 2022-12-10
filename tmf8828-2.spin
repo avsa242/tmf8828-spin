@@ -56,42 +56,24 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         repeat
 
 '3.2)
-    ser.str(@"sending core#DOWNLOAD_INIT...")
+    ser.str(@"sending DOWNLOAD_INIT...")
     bl_command(core#DOWNLOAD_INIT, 1, $29)
     ser.strln(@"done")
 
-    ser.str(@"polling bootloader for readiness...")
-    { poll bootloader - READY? }
-    tries := 0
-    repeat
-        ena := 0
-        readreg(core#BL_CMD_STAT, 3, @ena)
-        ++tries
-    until (ena == $ff_00_00)  ' xxx was 00 00 ff
-    ser.printf1(@"ready after %d tries\n\r", tries)
+    bl_wait_rdy{}
 
-'2)
-    ser.str(@"sending core#ADDR_RAM...")
+    ser.str(@"sending ADDR_RAM...")
     bl_command(core#ADDR_RAM, 2, $00_00)
     ser.strln(@"done")
 
-    { poll bootloader - READY? }
-    ser.str(@"polling bootloader for readiness...")
-    tries := 0
-    repeat
-        ena := 0
-        readreg(core#BL_CMD_STAT, 3, @ena)
-        ++tries
-    until (ena == $ff_00_00)  ' xxx was 00 00 ff
-    ser.printf1(@"ready after %d tries\n\r", tries)
+    bl_wait_rdy{}
 
-'3)
     { load RAM }
     img_remain := _img_sz
     img_ptr := @tmf8828_image                   ' init pointer to start of FW image
     repeat
         chunk_sz := img_remain <# 128           ' chunk size is the remaining size, up to 128 bytes
-        ser.pos_xy(0, 8)
+        ser.pos_xy(0, 10)
         ser.printf1(@"about to write offset %x\n\r", img_ptr)
         i2c.start()
         i2c.write(SLAVE_WR)
@@ -129,8 +111,7 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
     while img_remain
     ser.strln(@"COMPLETE!")
 
-
-    ser.str(@"Issuing core#RAMREMAP_RESET command...")
+    ser.str(@"Sending RAMREMAP_RESET command...")
     bl_command(core#RAMREMAP_RESET, 0, 0)
     ser.strln(@"done")
 
@@ -231,7 +212,7 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
     ser.str(@"Measuring results...")
     dira[INT_PIN] := 0
     repeat
-        repeat until ina[INT_PIN]
+        repeat until ina[INT_PIN] == 0
         readreg($e1, 1, @int_status)
         writereg($e1, 1, int_status)
         readreg($20, 132, @_ramdump)
@@ -239,8 +220,6 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         ser.hexdump(@_ramdump+4, $20, 2, 132-4, 16)
 
     repeat
-'3) Wait for interrupt or poll, and read out results
-'3b) STOP cmd
 
 PUB bl_command(cmd, len, ptr_args) | ck
 ' Execute bootloader command
@@ -278,7 +257,10 @@ PUB command(cmd)
     i2c.stop()
 
 PUB readreg(reg_nr, nr_bytes, ptr_buff)
-
+' Read register(s) from the device
+'   reg_nr: (starting) register number
+'   nr_bytes: number of bytes to read
+'   ptr_buff: pointer to buffer to read data to
     i2c.start()
     i2c.write(SLAVE_WR)
     i2c.write(reg_nr)
@@ -287,8 +269,25 @@ PUB readreg(reg_nr, nr_bytes, ptr_buff)
     i2c.rdblock_lsbf(ptr_buff, nr_bytes, i2c#NAK)
     i2c.stop()
 
-PUB writereg(reg_nr, nr_bytes, ptr_buff)
+PUB bl_wait_rdy{} | tries, ena
+' Wait for bootloader to signal ready
+    ser.str(@"polling bootloader for readiness...")
+    { poll bootloader - READY? }
+    tries := 0
+    repeat
+        ena := 0
+        readreg(core#BL_CMD_STAT, 3, @ena)
+        ++tries
+    until (ena == $ff_00_00)
+    ser.printf1(@"ready after %d tries\n\r", tries)
+    ser.getchar
 
+PUB writereg(reg_nr, nr_bytes, ptr_buff)
+' Write to device register(s)
+'   reg_nr: (starting) register number
+'   nr_bytes: number of bytes to write
+'   ptr_buff: if nr_bytes is 1..4, the value(s) to write
+'             if nr_bytes is >4, a pointer to the buffer of data to write
     i2c.start()
     i2c.write(SLAVE_WR)
     i2c.write(reg_nr)
