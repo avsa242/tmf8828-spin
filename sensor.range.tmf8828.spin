@@ -32,6 +32,7 @@ CON
     PKT_OFFS_RESULT_NUMBER  = $04
     PKT_OFFS_AMBIENT_LIGHT  = $08
     PKT_OFFS_PHOTON_COUNT   = $0c
+    PKT_OFFS_REFERENCE_COUNT= $10
 
 OBJ
 
@@ -365,6 +366,11 @@ PUB rd_packet(ptr_pkt)
     ifnot (ptr_pkt)
         ptr_pkt := @_meas_payld
     readreg(core#CONFIG_RESULT, 132, ptr_pkt)
+
+PUB reference_cnt{}: r
+' Get weight of the reference channel peak
+    r := 0
+    bytemove(@r, @_meas_payld+PKT_OFFS_REFERENCE_COUNT, 4)
 
 PUB serial_num(ptr_buff)
 ' Read device serial number
