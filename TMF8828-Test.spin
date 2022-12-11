@@ -5,7 +5,7 @@
     Description: TMF8828 bootloader and application test
     Copyright (c) 2022
     Started: Dec 9, 2022
-    Updated: Dec 10, 2022
+    Updated: Dec 11, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -29,8 +29,9 @@ OBJ
 VAR
 
     byte _ramdump[132]
+    byte _fact_cal[192*4]
 
-pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, status, aid, int_status
+pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, status, aid, int_status, mask_nr
 
     outa[EN_M] := 0
     dira[EN_M] := 1
@@ -58,17 +59,23 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
 
     appid := 0
     readreg(core#APPID, 1, @appid)
-    if (appid == $80)
+    if (appid == core#BL_RUNNING)
         ser.strln(@"bootloader running")
-    elseif (appid == $03)
+    elseif (appid == core#MEAS_APP_RUNNING)
         ser.strln(@"application running")
     else
         ser.strln(@"error: exception")
         repeat
 
+    fw_load{}
+    configure{}
+    factory_cal_tmf8828{}
+    measure{}
+
+PUB fw_load{} | img_remain, img_ptr, chunk_sz, img_csum, tmp, status, tries, aid, ena
 '3.2)
     ser.str(@"sending DOWNLOAD_INIT...")
-    bl_command(core#DOWNLOAD_INIT, 1, $29)
+    bl_command(core#DOWNLOAD_INIT, 1, $29)      ' $29: seed (not otherwise documented)
     ser.strln(@"done")
 
     bl_wait_rdy{}
@@ -137,98 +144,169 @@ pub main() | tries, ena, appid, tmp, img_ptr, img_remain, chunk_sz, img_csum, st
         if (++tries > 5)
             ser.strln(@"APPID read failed")
             repeat
-    until (aid == $03)
+    until (aid == core#MEAS_APP_RUNNING)
 
+PUB configure{} | status, tmp, mask_nr
 ' 4.1 step 1
     ser.str(@"Loading common config page...")
     command(core#CMD_LD_CFG_PG_COM)
 
-    repeat
-        status := 0
-        readreg(core#CMD_STAT, 1, @status)
-        if (status == $00)
-            ser.strln(@"STAT_OK")
-            quit
-    while (status => $10)
     ser.strln(@"done")
 
     ser.str(@"Verifying the config page is loaded...")
     status := 0
-    readreg($20, 4, @status)
+    readreg(core#CONFIG_RESULT, 4, @status)
 
     { verify the config page was loaded by checking the first few bytes: [$16][xx][$bc][$00] }
-    if ((status.byte[0] == $16) and (status.word[1] == $00_bc))
+    if ((status.byte[0] == core#CMD_LD_CFG_PG_COM) and (status.word[1] == $00_bc))
         ser.strln(@"verified")
     else
         ser.strln(@"verification failed - halting")
         repeat
 
     ser.str(@"changing measurement period to 100ms...")
-    writereg($24, 2, $00_64)
+    writereg(core#PERIOD_MS_LSB, 2, $00_64)
     ser.strln(@"done")
-
+'XXX
     ser.str(@"selecting pre-defined SPAD mask #6...")
-    writereg($34, 1, $06)
+    writereg(core#SPAD_MAP_ID, 1, $06)
     ser.strln(@"done")
 
     ser.str(@"config GPIO0 low while VCSEL is emitting...")
-    writereg($31, 1, $03)
+    writereg(core#GPIO_0, 1, $03)
     ser.strln(@"done")
 
     ser.str(@"writing common page...")
-    command($15)
+    command(core#CMD_WRITE_CFG_PG)
     ser.strln(@"done")
 
-    ser.str(@"Verifying the command executed...")
-    repeat
-        status := 0
-        readreg(core#CMD_STAT, 1, @status)
-        if (status == $00)
-            ser.strln(@"STAT_OK")
-            quit
-    while (status => $10)
+PUB factory_cal_tmf8820_21{} | tmp, status
+
+'4.4.1) factory cal TMF8820/21
+    ser.str(@"starting factory cal...")
+    command(core#CMD_FACTORY_CAL)
     ser.strln(@"done")
+
+    ser.str(@"loading factory calibration config page...")
+    command(core#CMD_LD_CFG_PG_FACT_CAL)
+    ser.strln(@"done")
+    ser.str(@"reading factory cal...")
+    readreg(core#CONFIG_RESULT, 192, @_fact_cal)
+    ser.strln(@"done")
+
+'4.4.2) load factory cal
+    ser.str(@"loading factory calibration config page...")
+    command(core#CMD_LD_CFG_PG_FACT_CAL)
+    ser.strln(@"done")
+
+    readreg(core#CONFIG_RESULT, 4, @tmp)
+    if ((tmp.byte[0] == core#CMD_LD_CFG_PG_FACT_CAL) and (tmp.word[1] == $00_bc))
+        ser.strln(@"config page loaded")
+
+    ser.str(@"writing calibration...")
+    writereg(core#FACTORY_CALIBR_FIRST, 192-4, @_fact_cal+4)
+    ser.strln(@"done")
+    status := 0
+    readreg(core#CALIBRATION_STATUS, 1, @status)
+    if (status == core#WARN_NO_FACT_CALIBR)
+        ser.strln(@"warning: no factory cal loaded")
+    elseif (status == core#WARN_FACT_CAL_SPAD_MASK_MISMATCH)
+        ser.strln(@"warning: factory cal doesn't match the selected SPAD map")
+
+PUB factory_cal_tmf8828{} | status, tmp, mask_nr
+'4.4.3) TMF8828 factory cal
+    ser.strln(@"TMF8828 factory calibration")
+    ser.str(@"Loading common config page...")
+    command(core#CMD_LD_CFG_PG_COM)
+
+    ser.str(@"Verifying the config page is loaded...")
+    status := 0
+    readreg(core#CONFIG_RESULT, 4, @status)
+
+    { verify the config page was loaded by checking the first few bytes: [$16][xx][$bc][$00] }
+    if ((status.byte[0] == core#COMMON_CID) and (status.word[1] == $00_bc))
+        ser.strln(@"verified")
+    else
+        ser.strln(@"verification failed - halting")
+        repeat
+
+    ser.str(@"writing common page...")
+    command(core#CMD_WRITE_CFG_PG)
+    ser.strln(@"done")
+
+    repeat tmp from 1 to 4
+        ser.printf1(@"calibrating SPAD mask %d...\n\r", tmp)
+        ser.str(@"resetting factory cal counter...")
+        command(core#CMD_RESET_FACTORY_CAL)
+        ser.strln(@"done")
+
+        ser.str(@"initiating calibration...")
+        command(core#CMD_FACTORY_CAL)
+        ser.strln(@"done")
+    command(core#CMD_RESET_FACTORY_CAL)
+
+'steps 7..11: 4 times
+    repeat mask_nr from 0 to 3
+        ser.str(@"loading factory calibration config page...")
+        command(core#CMD_LD_CFG_PG_FACT_CAL)
+
+        ser.printf1(@"reading factory cal for mask #%d...", mask_nr)
+        readreg(core#CONFIG_RESULT, 192, @_fact_cal+(mask_nr*192))
+        ser.strln(@"done")
+        command(core#CMD_WRITE_CFG_PG)
+'    ser.hexdump(@_fact_cal, 0, 2, 192, 16)
+'    ser.hexdump(@_fact_cal+192, 0, 2, 192, 16)
+'    ser.hexdump(@_fact_cal+(192*2), 0, 2, 192, 16)
+'    ser.hexdump(@_fact_cal+(192*3), 0, 2, 192, 16)
+
+'4.4.4) load factory cal
+    command(core#CMD_RESET_FACTORY_CAL)
+    repeat mask_nr from 0 to 3
+        command(core#CMD_LD_CFG_PG_FACT_CAL)
+        tmp := 0
+        readreg(core#CONFIG_RESULT, 4, @tmp)
+        if ((tmp.byte[0] == core#CMD_LD_CFG_PG_FACT_CAL) and (tmp.word[1] == $00_bc))
+            ser.strln(@"config page loaded")
+        '_fact_cal+(0*192)+4 = _fact_cal+4 ($24)
+        '_fact_cal+(1*192)+4 = _fact_cal+192+4 ($24)
+        '_fact_cal+(2*192)+4 = _fact_cal+384+4 ($24)
+        '_fact_cal+(3*192)+4 = _fact_cal+576+4 ($24)
+        writereg(core#FACTORY_CALIBR_FIRST, 192-4, @_fact_cal+(mask_nr*192)+4)
 
 '4.5) MEASURE cmd
     ser.str(@"Enabling interrupts...")
     writereg(core#INT_ENAB, 1, $02) '$62 to include error/warning/cmd done interrupts
     ser.strln(@"done")
 
-    writereg($e1, 1, $ff)
+    writereg(core#INT_STATUS, 1, $ff)
     ser.strln(@"done")
 
     ser.str(@"measuring...")
     command(core#CMD_MEASURE)
 
-    ser.str(@"Verifying the command executed...")
-    repeat
-        status := 0
-        readreg(core#CMD_STAT, 1, @status)
-        if (status == $01)
-            ser.strln(@"STAT_OK")
-            quit
-        if ((status > $01) and (status < $10))
-            ser.printf1(@"error: %2.2x\n\r", status)
-            repeat
-    while (status => $10)
     ser.strln(@"done")
 
     ser.str(@"checking app mode...")
     status := 0
-    readreg($10, 1, @status)
+    readreg(core#MODE, 1, @status)
     ser.hexs(status, 2)
     ser.newline()
 
+PUB measure{} | tmp, int_status
 '4.6)
+    ser.clear{}
     ser.str(@"Measuring results...")
+    tmp := 0
+    readreg(core#CALIBRATION_STATUS, 1, @tmp)
+    ser.printf1(@"cal status = %02.2x\n\r", tmp)
     dira[INT_PIN] := 0
     repeat
         repeat until ina[INT_PIN] == 0
-        readreg($e1, 1, @int_status)
-        writereg($e1, 1, int_status)
-        readreg($20, 132, @_ramdump)
-        ser.pos_xy(0, 27)
-        ser.hexdump(@_ramdump+4, $20, 2, 132-4, 16)
+        readreg(core#INT_STATUS, 1, @int_status)
+        writereg(core#INT_STATUS, 1, int_status)
+        readreg(core#CONFIG_RESULT, 192, @_ramdump)'132
+        ser.pos_xy(0, 2)
+        ser.hexdump(@_ramdump, $20, 2, 192, 16)'+4, $20, 2, 132-4, 16
 
     repeat
 
@@ -259,13 +337,30 @@ PUB sum_blk(ptr_data, len): ck | tmp
     repeat tmp from 0 to len-1
         ck += byte[ptr_data][tmp]
 
-PUB command(cmd)
+PUB command(cmd): status
 ' Execute application command
     i2c.start()
     i2c.write(SLAVE_WR)
     i2c.write(core#CMD_STAT)
     i2c.write(cmd)
     i2c.stop()
+
+    repeat
+        status := 0
+        readreg(core#CMD_STAT, 1, @status)
+        if (status == $01)
+            ser.fgcolor(ser#GREEN)
+            ser.strln(@"STAT_ACCEPTED")
+            ser.fgcolor(ser#GREY)
+            quit
+        if ((status > $01) and (status < $10))
+            ser.printf1(@"error: %2.2x\n\r", status)
+            repeat
+    while (status => $10)
+    if (status == core#STAT_OK)
+        ser.fgcolor(ser#GREEN)
+        ser.strln(@"STAT_OK")
+        ser.fgcolor(ser#GREY)
 
 PUB readreg(reg_nr, nr_bytes, ptr_buff)
 ' Read register(s) from the device

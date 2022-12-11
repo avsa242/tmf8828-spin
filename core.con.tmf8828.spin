@@ -98,6 +98,7 @@ CON
         CMD_LD_CFG_PG_SPAD1             = $17
         CMD_LD_CFG_PG_SPAD2             = $18
         CMD_LD_CFG_PG_FACT_CAL          = $19
+        CMD_RESET_FACTORY_CAL           = $1f
         CMD_FACTORY_CAL                 = $20
         CMD_I2C_SL_ADDR                 = $21
         FORCE_TMF8820_21_MODE           = $65
@@ -300,6 +301,7 @@ CON
     INT_PERSISTENCE                     = $2f   '
 
     CONFIDENCE_THRESHOLD                = $30
+
     GPIO_0                              = $31
     GPIO_0_MASK                         = $df
         DRV_STRENGTH                    = 6
