@@ -42,7 +42,6 @@ VAR
 
     word _ptr_fw
     word _img_sz
-    byte _INT_PIN
     byte _ramdump[132]
 
 PUB null{}
@@ -65,7 +64,6 @@ PUB startx(SCL_PIN, SDA_PIN, I2C_FREQ, ENA_PIN): status
     if (status := i2c.init(SCL_PIN, SDA_PIN, I2C_FREQ))
         outa[ENA_PIN] := 0
         dira[ENA_PIN] := 1
-        _INT_PIN := 25
         ser.init(17, 16, 0, 115_200)
         time.msleep(30)
         ser.clear
@@ -82,7 +80,7 @@ PUB startx(SCL_PIN, SDA_PIN, I2C_FREQ, ENA_PIN): status
 PUB stop{}
 ' Stop the driver
     i2c.deinit{}
-    _ptr_fw := _img_sz := _INT_PIN := 0
+    _ptr_fw := _img_sz := 0
     bytefill(@_ramdump, 0, 132)
 
 PUB preset_tmf8828_spad_wide3x3{}: status | tries
