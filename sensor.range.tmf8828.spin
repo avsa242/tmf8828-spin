@@ -34,6 +34,7 @@ CON
     PKT_OFFS_PHOTON_COUNT   = $0c
     PKT_OFFS_REFERENCE_COUNT= $10
     PKT_OFFS_SYS_TICK       = $14
+    PKT_OFFS_CONFIDENCE_ZN  = $38
 
 OBJ
 
@@ -176,6 +177,12 @@ PUB cmd_status{}: s
 '       STAT_ERR_UNKNOWN_MODE ($0e)
     s := 0
     readreg(core#CMD_STAT, 1, @s)
+
+PUB confidence(zone_nr): c
+' Get confidence of object presence rating of zone
+'   zone_nr: zone number to rate (0..35)
+'   Returns: confidence rating of 0 (no obj. detected) .. 255 (highest confidence)
+    return _meas_payld[PKT_OFFS_CONFIDENCE_ZN + (zone_nr * 3)]
 
 PUB cpu_ready{}: flag
 ' Flag indicating the sensor CPU is ready
