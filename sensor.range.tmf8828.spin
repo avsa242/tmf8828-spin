@@ -110,9 +110,10 @@ PUB preset_tmf8828_spad_wide3x3{}: status | tries
 
     tries := 0
     repeat until (cmd_status{} == core#STAT_OK)
-        if (tries > 25)
+        if (tries > 10)
             return -65539
         ++tries
+    ser.printf1(@"STAT_OK after %d tries\n\r", tries)
 
     if (get_config_page{} <> core#COMMON_CID)
         return -65540
