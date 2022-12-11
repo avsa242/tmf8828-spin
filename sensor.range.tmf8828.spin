@@ -347,6 +347,11 @@ PUB rd_packet(ptr_pkt)
         ptr_pkt := @_ramdump
     readreg(core#CONFIG_RESULT, 132, ptr_pkt)
 
+PUB serial_num(ptr_buff)
+' Read device serial number
+'   ptr_buff: pointer to buffer to copy serial number to (4 bytes)
+    readreg(core#SERIAL_NUMBER_0, 4, ptr_buff)
+
 PUB set_fw_image(ptr_img, img_sz)
 ' Setup firmware image
 '   ptr_img: pointer to firmware/application image

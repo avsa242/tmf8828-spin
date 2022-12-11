@@ -12,7 +12,8 @@ the repository.
 ## Salient Features
 
 * I2C connection at up to 1MHz
-* TBD
+* Read sensor temperature
+* Read sensor serial number
 
 ## Requirements
 
