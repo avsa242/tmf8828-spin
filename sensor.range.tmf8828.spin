@@ -365,7 +365,7 @@ PUB spad_map{}: id
     id := 0
     readreg(core#SPAD_MAP_ID, 1, @id)
 
-PUB bl_command(cmd, len, ptr_args) | ck
+PRI bl_command(cmd, len, ptr_args) | ck
 ' Execute bootloader command
     i2c.start{}
     i2c.write(SLAVE_WR)
@@ -386,12 +386,12 @@ PUB bl_command(cmd, len, ptr_args) | ck
     i2c.write(ck.byte[0] ^ $ff)  ' cksum
     i2c.stop{}
 
-PUB bl_status{}: status
+PRI bl_status{}: status
 
     status := 0
     readreg(core#BL_CMD_STAT, 1, @status)
 
-PUB bl_wait_rdy{} | tries, ena
+PRI bl_wait_rdy{} | tries, ena
 ' Wait for bootloader to signal ready
     ser.str(@"polling bootloader for readiness...")
     { poll bootloader - READY? }
@@ -403,7 +403,7 @@ PUB bl_wait_rdy{} | tries, ena
     until (ena == $ff_00_00)
     ser.printf1(@"ready after %d tries\n\r", tries)
 
-PUB command(cmd)
+PRI command(cmd)
 ' Execute application command
     i2c.start{}
     i2c.write(SLAVE_WR)
@@ -411,7 +411,7 @@ PUB command(cmd)
     i2c.write(cmd)
     i2c.stop{}
 
-PUB readreg(reg_nr, nr_bytes, ptr_buff)
+PRI readreg(reg_nr, nr_bytes, ptr_buff)
 ' Read register(s) from the device
 '   reg_nr: (starting) register number
 '   nr_bytes: number of bytes to read
@@ -424,13 +424,13 @@ PUB readreg(reg_nr, nr_bytes, ptr_buff)
     i2c.rdblock_lsbf(ptr_buff, nr_bytes, i2c#NAK)
     i2c.stop{}
 
-PUB sum_blk(ptr_data, len): ck | tmp
+PRI sum_blk(ptr_data, len): ck | tmp
 ' Sum a block of data
     ck := 0
     repeat tmp from 0 to len-1
         ck += byte[ptr_data][tmp]
 
-PUB writereg(reg_nr, nr_bytes, ptr_buff)
+PRI writereg(reg_nr, nr_bytes, ptr_buff)
 ' Write to device register(s)
 '   reg_nr: (starting) register number
 '   nr_bytes: number of bytes to write
