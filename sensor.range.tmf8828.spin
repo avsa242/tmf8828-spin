@@ -22,6 +22,10 @@ CON
     INT_MEAS_RDY    = (1 << core#INT2_ENAB)
     INT_ALL         = core#INT_STATUS_MASK
 
+    { device modes }
+    TMF8820_21_28   = $00
+    TMF8828         = $08
+
 OBJ
 
 { decide: Bytecode I2C engine, or PASM? Default is PASM if BC isn't specified }
@@ -81,113 +85,61 @@ PUB stop{}
     _ptr_fw := _img_sz := _INT_PIN := 0
     bytefill(@_ramdump, 0, 132)
 
-PUB app{}: status | tries
-
-    ser.str(@"enabling sensor power...")
+PUB {++opt(0)} preset_tmf8828_spad_wide3x3{}: status | tries
+' Preset settings:
+'   TMF8828 mode
+'   Wide FoV, 3x3 SPAD mask
+'   Active measurement mode (100ms period)
+'   GPIO0: output active low when VCSEL is pulsing
     powered(true)
 
     tries := 1
     repeat until cpu_ready{}
-        ++tries
-    ser.printf1(@"success after %d tries\n\r", tries)
 
-    case app_id{}
-        $80:
-            ser.strln(@"bootloader running")
-        $03:
-            ser.strln(@"application running")
-        other:
-            ser.strln(@"unknown state - halting")
-            repeat
-
-    if (fw_load{})
+    if (app_id{} <> core#BL_RUNNING)
         return -65536
+    if (status := fw_load{})
+        return
 
-    ser.str(@"checking APPID...")
     tries := 0
     repeat
         time.usleep(500)
         if (++tries > 5)
-            ser.strln(@"APPID read failed")
-            repeat
-    until app_id{} == core#MEAS_APP_RUNNING
+            return -65538
+    until (app_id{} == core#MEAS_APP_RUNNING)
 
-    ser.str(@"Loading common config page...")
     command(core#CMD_LD_CFG_PG_COM)
 
     tries := 0
-    repeat until cmd_status{} == core#STAT_OK
-        if (++tries > 5)
-            ser.strln(@"failed")
-            repeat
-    ser.strln(@"done")
+    repeat until (cmd_status{} == core#STAT_OK)
+        if (tries > 25)
+            return -65539
+        ++tries
 
-    ser.str(@"Verifying the config page is loaded...")
-    if (get_config_page{} == core#COMMON_CID)
-        ser.strln(@"verified")
-    else
-        ser.strln(@"verification failed - halting")
-        repeat
+    if (get_config_page{} <> core#COMMON_CID)
+        return -65540
 
-    ser.str(@"changing measurement period to 100ms...")
     set_meas_period(100)
-    ser.strln(@"done")
-
-    ser.str(@"selecting pre-defined SPAD mask #6...")
     set_spad_map(core#WIDE_3X3)
-    ser.strln(@"done")
-
-    ser.str(@"config GPIO0 low while VCSEL is emitting...")
     gpio0(core#OUT_LO_VCSEL_PULSE)
-    ser.strln(@"done")
-
-    ser.str(@"writing common page...")
     command(core#CMD_WRITE_CFG_PG)
-    ser.strln(@"done")
-
-    ser.str(@"Verifying the command executed...")
     tries := 0
     repeat until cmd_status{} == core#STAT_OK
         if (++tries > 5)
-            ser.strln(@"failed")
-            repeat
-    ser.strln(@"done")
-
-    ser.str(@"Enabling interrupts...")
+            return -65541
     int_set_mask(INT_MEAS_RDY)
-    ser.strln(@"done")
-
-    ser.str(@"Clearing interrupts...")
     int_clear(INT_ALL)
-    ser.strln(@"done")
-
-    ser.str(@"measuring...")
     command(core#CMD_MEASURE)
-
-    ser.str(@"Verifying the command executed...")
     repeat
         status := cmd_status{}
         if (status == core#STAT_ACCEPTED)
-            ser.strln(@"STAT_OK")
             quit
         if ((status > core#STAT_ACCEPTED) and (status < core#CMD_MEASURE))
-            ser.printf1(@"error: %2.2x\n\r", status)
-            repeat
+            return -65542
     while (status => core#CMD_MEASURE)
-    ser.strln(@"done")
-
-    ser.str(@"checking app mode...")
-    ser.hexs(dev_mode{}, 2)
-    ser.newline{}
-
-    ser.str(@"Measuring results...")
-    dira[_INT_PIN] := 0
-    repeat
-        repeat until ina[_INT_PIN] == 0
-        int_clear(interrupt{})
-        readreg(core#CONFIG_RESULT, 132, @_ramdump)
-        ser.pos_xy(0, 27)
-        ser.hexdump(@_ramdump, $20, 2, 132, 16)
+    if (dev_mode{} <> TMF8828)
+        return -65543
+    return 0
 
 PUB app_id{}: id
 ' Get currently running application
@@ -232,8 +184,8 @@ PUB dev_id{}: id
 PUB dev_mode{}: mode
 ' Get current device operating mode
 '   Returns:
-'       $00: TMF8820/21/28 mode
-'       $08: TMF8828 mode
+'       TMF8820_21_28 ($00): TMF8820/21/28 mode
+'       TMF8828 ($08): TMF8828 mode
     mode := 0
     readreg(core#MODE, 1, @mode)
 
@@ -282,7 +234,7 @@ PUB fw_load{}: status | img_remain, img_ptr, chunk_sz, img_csum, tries, tmp
             ser.printf1(@"WRITE FAILED: status %06.8x\n\r", status)
             if (++tries > 5)
                 ser.strln(@"number of retries exceeded maximum - halting")
-                repeat
+                return -65537
         else
             ser.strln(@"write OK")
             img_ptr += chunk_sz
@@ -365,6 +317,10 @@ PUB meas_per{}: per
     per := 0
     readreg(core#PERIOD_MS_LSB, 2, @per)
 
+PUB packet_ptr{}: p
+' Get pointer to driver's internal packet buffer
+    return @_ramdump
+
 PUB powered(state): curr_state
 ' Enable sensor power
 '   Valid values: TRUE (-1 or 1), FALSE (0)
@@ -378,6 +334,15 @@ PUB powered(state): curr_state
             writereg(core#ENABLE, 1, state)
         other:
             return ((curr_state & 1) == 1)
+
+PUB rd_packet(ptr_pkt)
+' Read sensor data packet
+'   ptr_pkt:
+'       pointer to buffer to copy packet to
+'       or 0 to use the driver internal buffer
+    ifnot (ptr_pkt)
+        ptr_pkt := @_ramdump
+    readreg(core#CONFIG_RESULT, 132, ptr_pkt)
 
 PUB set_fw_image(ptr_img, img_sz)
 ' Setup firmware image

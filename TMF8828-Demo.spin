@@ -31,10 +31,21 @@ OBJ
     time:   "time"
     range:  "sensor.range.tmf8828"
 
-PUB main{}
+PUB main{} | r
 
     setup{}
-    range.app{}
+    r := range.preset_tmf8828_spad_wide3x3{}
+    if (r)
+        ser.printf1(string("Setup failed - halting; error %d (see driver)\n\r"), r)
+        repeat
+    dira[INT_PIN] := 0
+
+    repeat
+        repeat until ina[INT_PIN] == 0
+        range.int_clear(range.interrupt{})
+        range.rd_packet(0)
+        ser.pos_xy(0, 3)
+        ser.hexdump(range.packet_ptr{}, $20, 2, 132, 16)
 
 PUB setup{}
 
