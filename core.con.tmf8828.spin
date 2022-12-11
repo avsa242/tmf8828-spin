@@ -25,13 +25,16 @@ CON
 
     MINOR                               = $01
     ENABLE                              = $e0
-    ENABLE_MASK                         = $71
-        CPU_RDY                         = 6
+    ENABLE_MASK                         = $31
+        CPU_RDY                         = 6     ' R/O
         PWRUP_SEL                       = 4
         PWRUP_SEL_BITS                  = %11
-        PWRUP_SEL_MASK                  = (PWRUP_SEL_BITS << PWRUP_SEL) & !ENABLE_MASK
+        PWRUP_SEL_MASK                  = (PWRUP_SEL_BITS << PWRUP_SEL) ^ ENABLE_MASK
+            PWRUP_DEF                   = 0 << PWRUP_SEL
+            PWRUP_NOSLEEP               = 1 << PWRUP_SEL
+            PWRUP_START_RAM_APP         = 2 << PWRUP_SEL
         PON                             = 0
-        PON_MASK                        = (1 << PON) & !ENABLE_MASK
+        PON_MASK                        = (1 << PON) ^ ENABLE_MASK
 
     INT_STATUS                          = $e1
         INT7                            = 6
