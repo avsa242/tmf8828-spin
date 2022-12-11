@@ -48,7 +48,7 @@ VAR
 
     word _ptr_fw
     word _img_sz
-    byte _ramdump[132]
+    byte _meas_payld[132]
 
 PUB null{}
 ' This is not a top-level object
@@ -87,7 +87,7 @@ PUB stop{}
 ' Stop the driver
     i2c.deinit{}
     _ptr_fw := _img_sz := 0
-    bytefill(@_ramdump, 0, 132)
+    bytefill(@_meas_payld, 0, 132)
 
 PUB preset_tmf8828_spad_wide3x3{}: status | tries
 ' Preset settings:
@@ -319,7 +319,7 @@ PUB interrupt{}: int_src
 PUB ir_data{}: ir
 ' Get sum of IR ambient light received by all channels
     ir := 0
-    bytemove(@ir, @_ramdump+PKT_OFFS_AMBIENT_LIGHT, 4)
+    bytemove(@ir, @_meas_payld+PKT_OFFS_AMBIENT_LIGHT, 4)
 
 PUB meas_per{}: per
 ' Get currently set measurement period
@@ -330,11 +330,11 @@ PUB meas_per{}: per
 PUB packet_cnt{}: p
 ' Get running counter of measurement packet results
 '   NOTE: In TMF8828 mode, the 2LSBs are sub-capture # and the bits 7..2 are the counter
-    return _ramdump[PKT_OFFS_RESULT_NUMBER]
+    return _meas_payld[PKT_OFFS_RESULT_NUMBER]
 
 PUB packet_ptr{}: p
 ' Get pointer to driver's internal packet buffer
-    return @_ramdump
+    return @_meas_payld
 
 PUB powered(state): curr_state
 ' Enable sensor power
@@ -356,7 +356,7 @@ PUB rd_packet(ptr_pkt)
 '       pointer to buffer to copy packet to
 '       or 0 to use the driver internal buffer
     ifnot (ptr_pkt)
-        ptr_pkt := @_ramdump
+        ptr_pkt := @_meas_payld
     readreg(core#CONFIG_RESULT, 132, ptr_pkt)
 
 PUB serial_num(ptr_buff)
@@ -389,7 +389,7 @@ PUB spad_map{}: id
 PUB temp_data{}: t
 ' Get temperature data from sensor packet
 '   NOTE: The sensor must be in measurement mode for this data to be valid
-    return _ramdump[PKT_OFFS_TEMP]
+    return _meas_payld[PKT_OFFS_TEMP]
 
 PUB temp_word2deg(t_wd)
 ' Convert temperature word to degrees Celsius (compatibility method)
