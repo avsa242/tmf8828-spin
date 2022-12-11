@@ -85,7 +85,7 @@ PUB stop{}
     _ptr_fw := _img_sz := _INT_PIN := 0
     bytefill(@_ramdump, 0, 132)
 
-PUB {++opt(0)} preset_tmf8828_spad_wide3x3{}: status | tries
+PUB preset_tmf8828_spad_wide3x3{}: status | tries
 ' Preset settings:
 '   TMF8828 mode
 '   Wide FoV, 3x3 SPAD mask

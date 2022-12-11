@@ -35,4 +35,9 @@ P1/SPIN1:
 ## Limitations
 
 * Very early in development - may malfunction, or outright fail to build
+* TMF8820/8821 mode not yet supported
+* Factory calibration not yet supported
+* Imaging functionality not yet implemented (only dumps sensor packet)
+* API not finalized
+* debugging output embedded in driver
 
