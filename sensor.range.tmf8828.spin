@@ -28,9 +28,10 @@ CON
     TMF8828                 = $08
 
     { packet offsets }
-    PKT_OFFS_TEMP           = 5
-    PKT_OFFS_RESULT_NUMBER  = 4
-    PKT_OFFS_AMBIENT_LIGHT  = 8
+    PKT_OFFS_TEMP           = $05
+    PKT_OFFS_RESULT_NUMBER  = $04
+    PKT_OFFS_AMBIENT_LIGHT  = $08
+    PKT_OFFS_PHOTON_COUNT   = $0c
 
 OBJ
 
@@ -335,6 +336,12 @@ PUB packet_cnt{}: p
 PUB packet_ptr{}: p
 ' Get pointer to driver's internal packet buffer
     return @_meas_payld
+
+PUB photon_cnt{}: p
+' Get the summed weight of the target peak of the closest target and all targets within 10cm
+'   of this target
+    p := 0
+    bytemove(@p, @_meas_payld+PKT_OFFS_PHOTON_COUNT, 4)
 
 PUB powered(state): curr_state
 ' Enable sensor power
