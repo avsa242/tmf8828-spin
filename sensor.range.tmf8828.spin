@@ -9,6 +9,7 @@
     See end of file for terms of use.
     --------------------------------------------
 }
+#include "sensor.temp.common.spinh"
 
 CON
 
@@ -25,6 +26,9 @@ CON
     { device modes }
     TMF8820_21_28   = $00
     TMF8828         = $08
+
+    { packet offsets }
+    PKT_OFFS_TEMP   = 5
 
 OBJ
 
@@ -364,6 +368,15 @@ PUB spad_map{}: id
 ' Get currently set SPAD map/FoV
     id := 0
     readreg(core#SPAD_MAP_ID, 1, @id)
+
+PUB temp_data{}: t
+' Get temperature data from sensor packet
+'   NOTE: The sensor must be in measurement mode for this data to be valid
+    return _ramdump[PKT_OFFS_TEMP]
+
+PUB temp_word2deg(t_wd)
+' Convert temperature word to degrees Celsius (compatibility method)
+    return t_wd{}                               ' no calc needed; sensor data is 1:1
 
 PRI bl_command(cmd, len, ptr_args) | ck
 ' Execute bootloader command
