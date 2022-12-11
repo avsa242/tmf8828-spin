@@ -35,6 +35,7 @@ CON
     PKT_OFFS_REFERENCE_COUNT= $10
     PKT_OFFS_SYS_TICK       = $14
     PKT_OFFS_CONFIDENCE_ZN  = $38
+    PKT_OFFS_DISTANCE_ZN    = $39
 
 OBJ
 
@@ -203,6 +204,13 @@ PUB dev_mode{}: mode
 '       TMF8828 ($08): TMF8828 mode
     mode := 0
     readreg(core#MODE, 1, @mode)
+
+PUB distance(zone_nr): d
+' Get measured distance of zone
+'   zone_nr: zone number to read distance
+'   Returns: distance in millimeters
+    d := 0
+    bytemove(@d, @_meas_payld+PKT_OFFS_DISTANCE_ZN + (zone_nr * 3), 2)
 
 PUB fw_load{}: status | img_remain, img_ptr, chunk_sz, img_csum, tries, tmp
 ' Load a firmware image
