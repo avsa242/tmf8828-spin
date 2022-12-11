@@ -13,22 +13,23 @@
 
 CON
 
-    SLAVE_WR        = core#SLAVE_ADDR
-    SLAVE_RD        = core#SLAVE_ADDR | 1
+    SLAVE_WR                = core#SLAVE_ADDR
+    SLAVE_RD                = core#SLAVE_ADDR | 1
 
     { interrupts }
-    INT_STATUS      = (1 << core#INT7_ENAB)
-    INT_CMD_RECVD   = (1 << core#INT6_ENAB)
-    INT_HISTO_RDY   = (1 << core#INT4_ENAB)
-    INT_MEAS_RDY    = (1 << core#INT2_ENAB)
-    INT_ALL         = core#INT_STATUS_MASK
+    INT_STATUS              = (1 << core#INT7_ENAB)
+    INT_CMD_RECVD           = (1 << core#INT6_ENAB)
+    INT_HISTO_RDY           = (1 << core#INT4_ENAB)
+    INT_MEAS_RDY            = (1 << core#INT2_ENAB)
+    INT_ALL                 = core#INT_STATUS_MASK
 
     { device modes }
-    TMF8820_21_28   = $00
-    TMF8828         = $08
+    TMF8820_21_28           = $00
+    TMF8828                 = $08
 
     { packet offsets }
-    PKT_OFFS_TEMP   = 5
+    PKT_OFFS_TEMP           = 5
+    PKT_OFFS_RESULT_NUMBER  = 4
 
 OBJ
 
@@ -319,6 +320,11 @@ PUB meas_per{}: per
 '   Returns: milliseconds
     per := 0
     readreg(core#PERIOD_MS_LSB, 2, @per)
+
+PUB packet_cnt{}: p
+' Get running counter of measurement packet results
+'   NOTE: In TMF8828 mode, the 2LSBs are sub-capture # and the bits 7..2 are the counter
+    return _ramdump[PKT_OFFS_RESULT_NUMBER]
 
 PUB packet_ptr{}: p
 ' Get pointer to driver's internal packet buffer
