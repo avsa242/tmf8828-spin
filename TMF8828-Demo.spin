@@ -41,13 +41,14 @@ PUB setup{}
     ser.init_def(115_200)
     time.msleep(30)
     ser.clear{}
-    ser.strln(@"Serial terminal started")
+    ser.strln(string("Serial terminal started"))
 
     if (range.startx(SCL_PIN, SDA_PIN, I2C_FREQ, ENABLE_PIN))
-        ser.strln(@"TMF8828 driver started")
+        ser.strln(string("TMF8828 driver started"))
     else
-        ser.strln(@"TMF8828 driver failed to start - halting")
+        ser.strln(string("TMF8828 driver failed to start - halting"))
         repeat
+
     range.set_fw_image(@tmf8828_image, _img_sz)
 
 #include "tmf8828_image.spin"
