@@ -5,7 +5,7 @@
     Description: TMF8828-specific constants
     Copyright (c) 2022
     Started: Dec 9, 2022
-    Updated: Dec 10, 2022
+    Updated: Dec 11, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -13,9 +13,10 @@ CON
 
     SLAVE_ADDR                          = $41 << 1
     I2C_MAX_FREQ                        = 1_000_000
-    DEVID_RESP                          = $80
+    DEVID_RESP                          = $08
 
     T_RAMREMAP_RESET                    = 6_000'uS
+    T_POR                               = 2_000
 
     { registers }
     { APPID == any, cid_rid == any }
@@ -37,12 +38,14 @@ CON
         PON_MASK                        = (1 << PON) ^ ENABLE_MASK
 
     INT_STATUS                          = $e1
+    INT_STATUS_MASK                     = $6a
         INT7                            = 6
         INT6                            = 5
         INT4                            = 3
         INT2                            = 1
 
     INT_ENAB                            = $e2
+    INT_ENAB_MASK                       = $6a
         INT7_ENAB                       = 6
         INT6_ENAB                       = 5
         INT4_ENAB                       = 3
