@@ -30,6 +30,7 @@ CON
     { packet offsets }
     PKT_OFFS_TEMP           = 5
     PKT_OFFS_RESULT_NUMBER  = 4
+    PKT_OFFS_AMBIENT_LIGHT  = 8
 
 OBJ
 
@@ -314,6 +315,11 @@ PUB interrupt{}: int_src
 '       1 (INT_MEAS_RDY): measurement result is ready
     int_src := 0
     readreg(core#INT_STATUS, 1, @int_src)
+
+PUB ir_data{}: ir
+' Get sum of IR ambient light received by all channels
+    ir := 0
+    bytemove(@ir, @_ramdump+PKT_OFFS_AMBIENT_LIGHT, 4)
 
 PUB meas_per{}: per
 ' Get currently set measurement period
