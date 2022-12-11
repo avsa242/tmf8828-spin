@@ -33,6 +33,7 @@ CON
     PKT_OFFS_AMBIENT_LIGHT  = $08
     PKT_OFFS_PHOTON_COUNT   = $0c
     PKT_OFFS_REFERENCE_COUNT= $10
+    PKT_OFFS_SYS_TICK       = $14
 
 OBJ
 
@@ -398,6 +399,11 @@ PUB spad_map{}: id
 ' Get currently set SPAD map/FoV
     id := 0
     readreg(core#SPAD_MAP_ID, 1, @id)
+
+PUB sys_tick{}: t
+' Get current system tick
+    t := 0
+    bytemove(@t, @_meas_payld+PKT_OFFS_SYS_TICK, 4)
 
 PUB temp_data{}: t
 ' Get temperature data from sensor packet
