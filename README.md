@@ -6,6 +6,9 @@ ToF imager
 
 **IMPORTANT**: This software is meant to be used with the [spin-standard-library](https://github.com/avsa242/spin-standard-library) (P8X32A) or ~~[p2-spin-standard-library](https://github.com/avsa242/p2-spin-standard-library) (P2X8C4M64P)~~. Please install the applicable library first before attempting to use this code, otherwise you will be missing several files required to build the project.
 
+NOTE: Until approval is received from ams/OSRAM, the firmware image for the sensor isn't included in
+the repository.
+
 ## Salient Features
 
 * I2C connection at up to 1MHz
@@ -40,4 +43,5 @@ P1/SPIN1:
 * Imaging functionality not yet implemented (only dumps sensor packet)
 * API not finalized
 * debugging output embedded in driver
+* Firmware image not included in repository (pending approval from mfr)
 
